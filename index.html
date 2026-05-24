@@ -929,13 +929,14 @@ function exportPDF() {
   // Build table body (data row + rating row per entry)
   const body = [];
   entries.forEach((e, i) => {
-    const condDesc   = [e.persist.desc, e.aperture.desc, e.rough.desc, e.infill.desc, e.weather.desc].map(l => '- ' + l).join('\n');
+    const bul = String.fromCharCode(149) + ' ';
+    const condDesc   = [e.persist.desc, e.aperture.desc, e.rough.desc, e.infill.desc, e.weather.desc].map(l => bul + l).join('\n');
     const condRating = `${e.persist.rating}+${e.aperture.rating}+${e.rough.rating}+${e.infill.rating}+${e.weather.rating} = ${e.cond4tot}`;
 
     body.push([
       { content: i+1, styles:{valign:'middle',halign:'center'} },
       e.location,
-      e.strength.desc.split('\n').map(l => '- ' + l).join('\n'),
+      e.strength.desc.split('\n').map(l => bul + l).join('\n'),
       `${e.rqd.value}%`,
       e.spacing.desc,
       condDesc,
