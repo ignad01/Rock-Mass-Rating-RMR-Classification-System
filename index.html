@@ -6,6 +6,7 @@
   <title>RMR Rock Mass Classification</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -328,14 +329,8 @@
       </div>
 
       <div class="field">
-        <label>Uniaxial Comp. Strength (MPa)</label>
-        <input type="number" id="f_ucs" min="0" step="any" placeholder="e.g. 150" oninput="ucsAutoSelect()" />
-        <span class="hint" id="ucs_hint">Enter MPa — R-grade auto-selected</span>
-      </div>
-
-      <div class="field">
         <label>UCS Grade (R-value)</label>
-        <select id="f_strength" onchange="recalc()">
+        <select id="f_strength" onchange="recalc(); showStrengthHint()">
           <option value="15" data-desc="Extremely Strong (R6)|>250 MPa|Specimen can only be chipped with a geological hammer">Extremely Strong (R6)</option>
           <option value="12" selected data-desc="Very Strong (R5)|100–250 MPa|Specimen requires many blows of a geological hammer to fracture it">Very Strong (R5)</option>
           <option value="7"  data-desc="Strong (R4)|50–100 MPa|Specimen requires more than one blow of a geological hammer to fracture it">Strong (R4)</option>
@@ -344,6 +339,7 @@
           <option value="1"  data-desc="Very Weak (R1)|1–5 MPa|Crumbles under firm blows with point of geological hammer; can be peeled by a pocket knife">Very Weak (R1)</option>
           <option value="0"  data-desc="Extremely Weak (R0)|0.25–1 MPa|Indented by thumbnail">Extremely Weak (R0)</option>
         </select>
+        <span class="hint" id="ucs_hint">100–250 MPa</span>
       </div>
 
       <div class="field">
@@ -560,14 +556,14 @@
 
     <div class="btn-row" style="margin-top:0; margin-bottom:18px">
       <button class="btn btn-green" onclick="exportPDF()">&#8659; Export PDF</button>
-      <button class="btn btn-blue"  onclick="exportCSV()">&#8659; Export CSV</button>
+      <button class="btn btn-blue"  onclick="exportExcel()">&#8659; Export Excel</button>
       <button class="btn btn-red"   onclick="clearAll()">Clear All</button>
     </div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>#</th>
+            <th>S.N</th>
             <th>RD / Offset (m)<br>Location</th>
             <th>Strength of Intact<br>Rock Mass</th>
             <th>RQD*</th>
@@ -619,28 +615,10 @@ function selTxt(id)  {
   return s.options[s.selectedIndex].text.split('[Rating')[0].trim();
 }
 
-// ── UCS MPa → auto-select R-grade ─────────────────────────────
-function ucsAutoSelect() {
-  const mpa = parseFloat(document.getElementById('f_ucs').value);
+function showStrengthHint() {
   const sel  = document.getElementById('f_strength');
-  const hint = document.getElementById('ucs_hint');
-  if (isNaN(mpa) || document.getElementById('f_ucs').value === '') {
-    hint.textContent = 'Enter MPa — R-grade auto-selected';
-    recalc(); return;
-  }
-  let ratingVal;
-  if      (mpa > 250) ratingVal = 15;
-  else if (mpa >= 100) ratingVal = 12;
-  else if (mpa >= 50)  ratingVal = 7;
-  else if (mpa >= 25)  ratingVal = 4;
-  else if (mpa >= 5)   ratingVal = 2;
-  else if (mpa >= 1)   ratingVal = 1;
-  else                 ratingVal = 0;
-  for (let i = 0; i < sel.options.length; i++) {
-    if (parseInt(sel.options[i].value) === ratingVal) { sel.selectedIndex = i; break; }
-  }
-  hint.textContent = `→ ${sel.options[sel.selectedIndex].text}  |  Rating: ${ratingVal}`;
-  recalc();
+  const parts = sel.options[sel.selectedIndex].getAttribute('data-desc').split('|');
+  document.getElementById('ucs_hint').textContent = parts[1];
 }
 
 // ── Jv → RQD helper ───────────────────────────────────────────
@@ -720,10 +698,8 @@ function addEntry() {
 
   const strSel   = document.getElementById('f_strength');
   const strParts = strSel.options[strSel.selectedIndex].getAttribute('data-desc').split('|');
-  const ucsInput = document.getElementById('f_ucs').value.trim();
-  const ucsBullet = ucsInput ? ucsInput + ' MPa' : strParts[1];
   const wgrade   = document.getElementById('f_wgrade').value;
-  const strFull  = wgrade + '\n' + strParts[0] + '\n' + ucsBullet + '\n' + strParts[2];
+  const strFull  = wgrade + '\n' + strParts[0] + '\n' + strParts[1] + '\n' + strParts[2];
 
   const rd        = document.getElementById('f_rd').value.trim();
   const offset    = document.getElementById('f_offset').value.trim();
@@ -764,10 +740,9 @@ function clearAll() {
 function clearForm() {
   document.getElementById('f_rd').value          = '';
   document.getElementById('f_offset').value      = '';
-  document.getElementById('f_ucs').value         = '';
   document.getElementById('f_jv').value          = '';
-  document.getElementById('ucs_hint').textContent = 'Enter MPa — R-grade auto-selected';
   document.getElementById('rqd_hint').textContent = 'Enter Jv → RQD = 115 − 3.3 × Jv';
+  showStrengthHint();
   recalc();
 }
 
@@ -833,50 +808,98 @@ function renderTable() {
 }
 
 // ── Export CSV ─────────────────────────────────────────────────
-function exportCSV() {
+function exportExcel() {
   if (!entries.length) { alert('No entries to export.'); return; }
 
-  const hdr = [
-    '#','RD/Offset (Location)',
-    'Strength Description','Strength Rating',
-    'RQD (%)','RQD Rating',
-    'Spacing Description','Spacing Rating',
-    'Persistence','Persistence Rating',
-    'Aperture','Aperture Rating',
-    'Roughness','Roughness Rating',
-    'Infilling','Infilling Rating',
-    'Weathering','Weathering Rating',
-    'Condition Total Rating',
-    'Groundwater','Groundwater Rating',
-    'Orientation','Orientation Rating',
-    'RMR','Rock Class','Category'
+  const HDR = [
+    'S.N',
+    'RD / Offset (m)\nLocation',
+    'Strength of Intact Rock Mass',
+    'RQD*',
+    'Spacing of Discontinuity',
+    'Condition of Discontinuity\n(Persistence, Aperture, Roughness, Infilling, Weathering)',
+    'Groundwater Condition',
+    'Discontinuity Orientation',
+    'RMR / Rock Class'
   ];
 
-  const rows = entries.map((e, i) => [
-    i+1, e.location,
-    e.strength.desc, e.strength.rating,
-    e.rqd.value, e.rqd.rating,
-    e.spacing.desc, e.spacing.rating,
-    e.persist.desc, e.persist.rating,
-    e.aperture.desc, e.aperture.rating,
-    e.rough.desc, e.rough.rating,
-    e.infill.desc, e.infill.rating,
-    e.weather.desc, e.weather.rating,
-    e.cond4tot,
-    e.gw.desc, e.gw.rating,
-    e.orient.desc, e.orient.rating,
-    e.rmr, `Class ${e.cls.cls}`, e.cls.cat
-  ]);
+  const aoa = [HDR];
 
-  const csv = [hdr, ...rows]
-    .map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(','))
-    .join('\r\n');
+  entries.forEach((e, i) => {
+    const condDesc   = [e.persist.desc, e.aperture.desc, e.rough.desc, e.infill.desc, e.weather.desc].map(l => '• ' + l).join('\n');
+    const condRating = `${e.persist.rating}+${e.aperture.rating}+${e.rough.rating}+${e.infill.rating}+${e.weather.rating} = ${e.cond4tot}`;
+    const rmrText    = `RMR = ${e.rmr}\nClass ${e.cls.cls} (${e.cls.cat})`;
 
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
-  const a    = Object.assign(document.createElement('a'), { href: url, download: 'RMR_Classification.csv' });
-  a.click();
-  URL.revokeObjectURL(url);
+    // Data row
+    aoa.push([
+      i + 1,
+      e.location,
+      e.strength.desc.split('\n').map(l => '• ' + l).join('\n'),
+      `${e.rqd.value}%`,
+      e.spacing.desc,
+      condDesc,
+      e.gw.desc,
+      e.orient.desc,
+      rmrText
+    ]);
+
+    // Rating row
+    aoa.push([
+      'Rating', '',
+      e.strength.rating,
+      e.rqd.rating,
+      e.spacing.rating,
+      condRating,
+      e.gw.rating,
+      e.orient.rating,
+      ''
+    ]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+  // Column widths
+  ws['!cols'] = [
+    { wch: 6 },   // #
+    { wch: 18 },  // Location
+    { wch: 30 },  // Strength
+    { wch: 10 },  // RQD
+    { wch: 18 },  // Spacing
+    { wch: 38 },  // Condition
+    { wch: 18 },  // Groundwater
+    { wch: 22 },  // Orientation
+    { wch: 22 },  // RMR
+  ];
+
+  // Enable wrap-text + style for every cell
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for (let R = range.s.r; R <= range.e.r; R++) {
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const addr = XLSX.utils.encode_cell({ r: R, c: C });
+      if (!ws[addr]) continue;
+      const isHeader  = R === 0;
+      const isRating  = R > 0 && (R % 2 === 0);   // every even row after header = rating row
+      ws[addr].s = {
+        alignment: { wrapText: true, vertical: 'top' },
+        font: isHeader  ? { bold: true, color: { rgb: 'FFFFFF' } }
+            : isRating  ? { bold: true, italic: true, color: { rgb: '1A3A5C' } }
+            : {},
+        fill: isHeader ? { fgColor: { rgb: '1A3A5C' } }
+            : isRating ? { fgColor: { rgb: 'EEF3FA' } }
+            : { fgColor: { rgb: 'FFFFFF' } },
+        border: {
+          top:    { style: 'thin', color: { rgb: 'C5D4E8' } },
+          bottom: { style: 'thin', color: { rgb: 'C5D4E8' } },
+          left:   { style: 'thin', color: { rgb: 'C5D4E8' } },
+          right:  { style: 'thin', color: { rgb: 'C5D4E8' } }
+        }
+      };
+    }
+  }
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'RMR Classification');
+  XLSX.writeFile(wb, 'RMR_Classification.xlsx');
 }
 
 // ── Export PDF ─────────────────────────────────────────────────
@@ -976,6 +999,7 @@ function exportPDF() {
 
 // Init
 recalc();
+showStrengthHint();
 </script>
 </body>
 </html>
