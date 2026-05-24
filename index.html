@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RMR Rock Mass Classification</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #eef1f5;
+      color: #2d3748;
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1a3a5c 0%, #2563a8 100%);
+      color: #fff;
+      padding: 28px 40px 22px;
+      text-align: center;
+      box-shadow: 0 3px 12px rgba(0,0,0,0.18);
+    }
+    header h1 { font-size: 22px; letter-spacing: .4px; margin-bottom: 5px; }
+    header p  { font-size: 13px; opacity: .75; }
+
+    .container { max-width: 1280px; margin: 28px auto; padding: 0 18px; }
+
+    /* ── Card ── */
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 14px rgba(0,0,0,.07);
+      padding: 28px 30px;
+      margin-bottom: 26px;
+    }
+    .card-title {
+      font-size: 16px; font-weight: 700; color: #1a3a5c;
+      border-bottom: 2px solid #dde6f0;
+      padding-bottom: 10px; margin-bottom: 22px;
+    }
+
+    /* ── Form grid ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px 20px;
+    }
+    .span-full { grid-column: 1 / -1; }
+
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label {
+      font-size: 12px; font-weight: 700;
+      color: #4a5568; text-transform: uppercase; letter-spacing: .5px;
+    }
+    .field input, .field select {
+      padding: 9px 11px;
+      border: 1.5px solid #cbd5e0;
+      border-radius: 7px;
+      font-size: 13.5px;
+      background: #f9fafc;
+      transition: border-color .18s, box-shadow .18s;
+    }
+    .field input:focus, .field select:focus {
+      outline: none;
+      border-color: #2563a8;
+      box-shadow: 0 0 0 3px rgba(37,99,168,.12);
+      background: #fff;
+    }
+    .field .hint { font-size: 11px; color: #94a3b8; }
+
+    /* ── Section separator ── */
+    .section-sep {
+      grid-column: 1 / -1;
+      display: flex; align-items: center; gap: 10px;
+      margin-top: 6px;
+    }
+    .section-sep span {
+      font-size: 12px; font-weight: 700; color: #2563a8;
+      background: #e8f0fb; padding: 5px 12px; border-radius: 20px;
+      white-space: nowrap;
+    }
+    .section-sep hr { flex: 1; border: none; border-top: 1.5px solid #e2e8f0; }
+
+    /* ── RMR live panel ── */
+    .rmr-panel {
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, #1a3a5c, #2563a8);
+      border-radius: 10px;
+      padding: 20px 28px;
+      display: flex; gap: 32px; flex-wrap: wrap; align-items: center;
+      margin-top: 8px;
+    }
+    .rmr-box { text-align: center; }
+    .rmr-val  { font-size: 36px; font-weight: 800; color: #fff; line-height: 1; }
+    .rmr-lbl  { font-size: 11px; color: rgba(255,255,255,.65); margin-top: 4px; text-transform: uppercase; letter-spacing: .6px; }
+    .rmr-breakdown {
+      flex: 1; min-width: 220px;
+      font-size: 11.5px; color: rgba(255,255,255,.8);
+      line-height: 1.7;
+    }
+    .rmr-breakdown strong { color: #fff; }
+
+    /* ── Buttons ── */
+    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+    .btn {
+      padding: 10px 22px; border: none; border-radius: 7px;
+      font-size: 13.5px; font-weight: 600; cursor: pointer;
+      transition: transform .12s, opacity .12s;
+    }
+    .btn:hover { opacity: .88; transform: translateY(-1px); }
+    .btn:active { transform: none; }
+    .btn-primary  { background: #1a3a5c; color: #fff; }
+    .btn-green    { background: #16a34a; color: #fff; }
+    .btn-blue     { background: #2563a8; color: #fff; }
+    .btn-red      { background: #dc2626; color: #fff; }
+    .btn-outline  { background: transparent; border: 2px solid #1a3a5c; color: #1a3a5c; }
+
+    /* ── Results table ── */
+    .table-wrap {
+      overflow-x: auto; margin-top: 4px;
+      -webkit-overflow-scrolling: touch;
+      background:
+        linear-gradient(to right, #fff 30%, rgba(255,255,255,0)),
+        linear-gradient(to left,  #fff 30%, rgba(255,255,255,0)) 100% 0,
+        radial-gradient(farthest-side at 0 50%, rgba(0,0,0,.12), transparent),
+        radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,.12), transparent) 100% 0;
+      background-repeat: no-repeat;
+      background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+      background-attachment: local, local, scroll, scroll;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    thead th {
+      background: #1a3a5c; color: #fff;
+      padding: 11px 12px; text-align: left;
+      font-size: 11.5px; white-space: nowrap;
+      vertical-align: bottom;
+    }
+    tbody td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e5eaf2;
+      vertical-align: top;
+    }
+    .data-row:hover td { background: #f0f6ff; }
+    .rating-row td {
+      font-weight: 700; color: #1a3a5c;
+      font-size: 11.5px; background: #eef3fa;
+      border-bottom: 2px solid #c5d4e8;
+      font-style: italic;
+    }
+
+    /* ── RMR badge ── */
+    .rmr-result { font-weight: 700; color: #1a3a5c; font-size: 13px; }
+    .rock-badge {
+      display: inline-block; padding: 2px 8px;
+      border-radius: 4px; font-size: 11px; font-weight: 700;
+      margin-top: 2px;
+    }
+    .cl-I   { background: #d1fae5; color: #065f46; }
+    .cl-II  { background: #dbeafe; color: #1e3a8a; }
+    .cl-III { background: #fef9c3; color: #713f12; }
+    .cl-IV  { background: #ffedd5; color: #7c2d12; }
+    .cl-V   { background: #fee2e2; color: #7f1d1d; }
+
+    .del-btn {
+      background: none; border: none; cursor: pointer;
+      color: #dc2626; font-size: 15px; padding: 3px 6px;
+      border-radius: 4px; transition: background .15s;
+    }
+    .del-btn:hover { background: #fee2e2; }
+
+    .empty-msg {
+      text-align: center; padding: 48px 20px;
+      color: #a0aec0; font-size: 14px;
+    }
+
+    /* ── Summary stats ── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 14px; margin-bottom: 20px;
+    }
+    .stat-box {
+      background: #f0f6ff; border: 1.5px solid #c7ddf7;
+      border-radius: 9px; padding: 14px 16px; text-align: center;
+    }
+    .stat-val { font-size: 26px; font-weight: 800; color: #1a3a5c; }
+    .stat-lbl { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .4px; margin-top: 3px; }
+
+    /* ── Legend ── */
+    .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+    .leg-item {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11.5px; font-weight: 600; color: #374151;
+    }
+    .leg-dot {
+      width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0;
+    }
+
+    /* ── RMR Reference Table ── */
+    .rmr-ref-table {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+    .rmr-ref-table thead th {
+      padding: 9px 18px; text-align: center; font-weight: 700;
+      font-size: 13px; letter-spacing: 0.3px;
+    }
+    .rmr-ref-table tbody td {
+      padding: 9px 18px; text-align: center; border: 1px solid #e2e8f0;
+      font-size: 13px;
+    }
+    .rmr-ref-table .ref-label-col {
+      background: #f1f5f9; font-weight: 700; color: #374151;
+      text-align: left; white-space: nowrap;
+    }
+    .rmr-ref-table .ref-row-label {
+      background: #f1f5f9; font-weight: 600; color: #374151;
+      text-align: left; white-space: nowrap; border: 1px solid #e2e8f0;
+    }
+
+    /* ── Responsive ── */
+
+    /* Tablet (≤ 900px) */
+    @media (max-width: 900px) {
+      .form-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    /* Mobile (≤ 620px) */
+    @media (max-width: 620px) {
+      header { padding: 16px 16px 12px; }
+      header h1 { font-size: 17px; letter-spacing: 0; }
+      header p  { font-size: 11px; }
+
+      .container { padding: 0 10px; margin: 12px auto; }
+
+      .card { padding: 16px 14px; margin-bottom: 14px; border-radius: 10px; }
+      .card-title { font-size: 13.5px; margin-bottom: 14px; padding-bottom: 8px; }
+
+      .form-grid { grid-template-columns: 1fr; gap: 12px 0; }
+
+      /* Prevent iOS auto-zoom on focus */
+      .field input, .field select { font-size: 16px; }
+      .field label { font-size: 11px; }
+
+      .section-sep span { font-size: 11px; padding: 4px 10px; }
+
+      .rmr-panel { padding: 14px 16px; gap: 12px; flex-direction: column; }
+      .rmr-val  { font-size: 26px; }
+      .rmr-lbl  { font-size: 10px; }
+      .rmr-breakdown { font-size: 11px; min-width: 100%; }
+
+      /* Full-width stacked buttons */
+      .btn-row { flex-direction: column; gap: 8px; }
+      .btn { width: 100%; padding: 13px 16px; font-size: 14.5px; border-radius: 8px; }
+
+      /* Stats 2-col on mobile */
+      .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+      .stat-box { padding: 12px 10px; }
+      .stat-val { font-size: 22px; }
+      .stat-lbl { font-size: 10px; }
+
+      /* Reference table smaller text */
+      .rmr-ref-table thead th { padding: 7px 8px; font-size: 11px; }
+      .rmr-ref-table tbody td { padding: 7px 8px; font-size: 11px; }
+
+      /* Results table — smooth horizontal scroll */
+      .table-wrap { -webkit-overflow-scrolling: touch; border-radius: 8px; }
+      table { font-size: 11px; }
+      thead th { padding: 8px 8px; font-size: 10px; }
+      tbody td { padding: 7px 8px; }
+      .empty-msg { font-size: 13px; padding: 32px 16px; }
+    }
+
+    /* Extra small (≤ 400px) */
+    @media (max-width: 400px) {
+      header h1 { font-size: 15px; }
+      .rmr-val  { font-size: 22px; }
+      .stat-val { font-size: 19px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Rock Mass Rating (RMR) Classification System</h1>
+  <p>Bieniawski (1989) — Geomechanics Classification &nbsp;|&nbsp; Parameters 1–6</p>
+</header>
+
+<div class="container">
+
+  <!-- ═══════════ INPUT FORM ═══════════ -->
+  <div class="card">
+    <div class="card-title">Add New Borehole / Location Entry</div>
+    <div class="form-grid">
+
+      <!-- Project info -->
+      <div class="field span-full" style="max-width:520px">
+        <label>Project / Site Name</label>
+        <input type="text" id="f_project" placeholder="e.g. Tehri Dam — Left Bank Tunnel" />
+      </div>
+
+      <!-- Location: RD + Offset + Direction -->
+      <div class="field">
+        <label>RD (m)</label>
+        <input type="number" id="f_rd" min="0" step="0.01" placeholder="e.g. 346.08" />
+      </div>
+
+      <div class="field">
+        <label>Offset (m)</label>
+        <input type="number" id="f_offset" min="0" step="0.01" placeholder="e.g. 15" />
+      </div>
+
+      <div class="field">
+        <label>Direction</label>
+        <select id="f_direction">
+          <option value="Up-Stream">Up-Stream</option>
+          <option value="Down-Stream">Down-Stream</option>
+          <option value="Dam-Axis">Dam-Axis</option>
+        </select>
+      </div>
+
+      <!-- ── 1. Strength ── -->
+      <div class="section-sep span-full">
+        <span>1 · Strength of Intact Rock Mass</span><hr/>
+      </div>
+
+      <div class="field">
+        <label>Uniaxial Comp. Strength (MPa)</label>
+        <input type="number" id="f_ucs" min="0" step="any" placeholder="e.g. 150" oninput="ucsAutoSelect()" />
+        <span class="hint" id="ucs_hint">Enter MPa — R-grade auto-selected</span>
+      </div>
+
+      <div class="field">
+        <label>UCS Grade (R-value)</label>
+        <select id="f_strength" onchange="recalc()">
+          <option value="15" data-desc="Extremely Strong (R6)|>250 MPa|Specimen can only be chipped with a geological hammer">Extremely Strong (R6)</option>
+          <option value="12" selected data-desc="Very Strong (R5)|100–250 MPa|Specimen requires many blows of a geological hammer to fracture it">Very Strong (R5)</option>
+          <option value="7"  data-desc="Strong (R4)|50–100 MPa|Specimen requires more than one blow of a geological hammer to fracture it">Strong (R4)</option>
+          <option value="4"  data-desc="Medium Strong (R3)|25–50 MPa|Cannot be scraped with a pocket knife; fractured with single blow of geological hammer">Medium Strong (R3)</option>
+          <option value="2"  data-desc="Weak (R2)|5–25 MPa|Can be peeled with a pocket knife with difficulty; shallow indentation made by firm blow">Weak (R2)</option>
+          <option value="1"  data-desc="Very Weak (R1)|1–5 MPa|Crumbles under firm blows with point of geological hammer; can be peeled by a pocket knife">Very Weak (R1)</option>
+          <option value="0"  data-desc="Extremely Weak (R0)|0.25–1 MPa|Indented by thumbnail">Extremely Weak (R0)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Weathering Grade</label>
+        <select id="f_wgrade">
+          <option value="Fresh (W1)">Fresh (W1)</option>
+          <option value="Slightly Weathered (W2)">Slightly Weathered (W2)</option>
+          <option value="Moderately Weathered (W3)">Moderately Weathered (W3)</option>
+          <option value="Highly Weathered (W4)">Highly Weathered (W4)</option>
+          <option value="Completely Weathered (W5)">Completely Weathered (W5)</option>
+        </select>
+      </div>
+
+      <!-- ── 2. RQD ── -->
+      <div class="section-sep span-full">
+        <span>2 · Rock Quality Designation (RQD)</span><hr/>
+      </div>
+
+      <div class="field">
+        <label>Volumetric Joint Count (Jv)</label>
+        <input type="number" id="f_jv" min="0" step="any" placeholder="e.g. 10" oninput="recalc()" />
+        <span class="hint" id="rqd_hint">Enter Jv → RQD = 115 − 3.3 × Jv</span>
+      </div>
+
+      <!-- ── 3. Spacing ── -->
+      <div class="section-sep span-full">
+        <span>3 · Spacing of Discontinuities</span><hr/>
+      </div>
+
+      <div class="field">
+        <label>Spacing of Discontinuities</label>
+        <select id="f_spacing" onchange="recalc()">
+          <option value="20">&gt; 2000 m </option>
+          <option value="15">600 – 2000 m </option>
+          <option value="10" selected>200 – 600 mm </option>
+          <option value="8">60 – 200 mm</option>
+          <option value="5">&lt; 60 mm </option>
+        </select>
+      </div>
+
+      <!-- ── 4. Condition ── -->
+      <div class="section-sep span-full">
+        <span>4 · Condition of Discontinuity</span><hr/>
+      </div>
+
+      <div class="field">
+        <label>Persistence</label>
+        <select id="f_persist" onchange="recalc()">
+          <option value="6">&lt;1 m </option>
+          <option value="4">1–3 m </option>
+          <option value="2" selected>3–10 m </option>
+          <option value="1">10–20 m </option>
+          <option value="0">&gt;20 m </option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Aperture</label>
+        <select id="f_aperture" onchange="recalc()">
+          <option value="6">None </option>
+          <option value="5">&lt;0.1 mm </option>
+          <option value="4" selected>0.1–1 mm </option>
+          <option value="1">1–5 mm </option>
+          <option value="0">&gt;5 mm </option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Roughness</label>
+        <select id="f_rough" onchange="recalc()">
+          <option value="6">Very Rough </option>
+          <option value="5">Rough </option>
+          <option value="3" selected>Slightly Rough </option>
+          <option value="1">Smooth </option>
+          <option value="0">Slickensided </option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Infilling</label>
+        <select id="f_infill" onchange="recalc()">
+          <option value="6" selected>None </option>
+          <option value="4">Hard filling &lt;5 mm </option>
+          <option value="2">Hard filling &gt;5 mm </option>
+          <option value="2">Soft filling &lt;5 mm </option>
+          <option value="0">Soft filling &gt;5 mm </option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Weathering</label>
+        <select id="f_weather" onchange="recalc()">
+          <option value="6" selected>Unweathered </option>
+          <option value="5">Slightly Weathered </option>
+          <option value="3">Moderately Weathered </option>
+          <option value="1">Highly Weathered </option>
+          <option value="0">Decomposed </option>
+        </select>
+      </div>
+
+      <!-- ── 5. Groundwater ── -->
+      <div class="section-sep span-full">
+        <span>5 · Groundwater Condition</span><hr/>
+      </div>
+
+      <div class="field">
+        <label>Groundwater</label>
+        <select id="f_gw" onchange="recalc()">
+          <option value="15" selected>Completely Dry</option>
+          <option value="10">Damp </option>
+          <option value="7">Wet </option>
+          <option value="4">Dripping </option>
+          <option value="0">Flowing </option>
+        </select>
+      </div>
+
+      <!-- ── 6. Orientation ── -->
+      <div class="section-sep span-full">
+        <span>6 · Discontinuity Orientation Adjustment</span><hr/>
+      </div>
+
+      <div class="field">
+        <label>Strike &amp; Dip Orientation</label>
+        <select id="f_orient" onchange="recalc()">
+          <option value="vf">Very Favorable</option>
+          <option value="fav">Favorable</option>
+          <option value="fair">Fair</option>
+          <option value="unf" selected>Unfavorable</option>
+          <option value="vunf">Very Unfavorable</option>
+        </select>
+      </div>
+
+      <!-- ── Live RMR Panel ── -->
+      <div class="rmr-panel span-full">
+        <div class="rmr-box">
+          <div class="rmr-val" id="live_rmr">—</div>
+          <div class="rmr-lbl">RMR Value</div>
+        </div>
+        <div class="rmr-box">
+          <div class="rmr-val" id="live_class">—</div>
+          <div class="rmr-lbl">Rock Class</div>
+        </div>
+        <div class="rmr-box">
+          <div class="rmr-val" id="live_cat">—</div>
+          <div class="rmr-lbl">Category</div>
+        </div>
+        <div class="rmr-breakdown" id="live_breakdown">
+          Fill in the form to see live RMR calculation.
+        </div>
+      </div>
+
+    </div><!-- /form-grid -->
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="addEntry()">+ Add to Table</button>
+      <button class="btn btn-outline" onclick="clearForm()">Clear Form</button>
+    </div>
+  </div>
+
+  <!-- ═══════════ RMR LEGEND ═══════════ -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:14px">C. Rock Mass Classes Determined from Total Ratings — Bieniawski (1989)</div>
+    <div style="overflow-x:auto">
+      <table class="rmr-ref-table">
+        <thead>
+          <tr>
+            <th class="ref-label-col"></th>
+            <th style="background:#065f46;color:#fff">100 ← 81</th>
+            <th style="background:#1d4ed8;color:#fff">80 ← 61</th>
+            <th style="background:#92400e;color:#fff">60 ← 41</th>
+            <th style="background:#b45309;color:#fff">40 ← 21</th>
+            <th style="background:#991b1b;color:#fff">&lt; 21</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="ref-row-label">Class number</td>
+            <td style="color:#065f46;font-weight:700">I</td>
+            <td style="color:#1d4ed8;font-weight:700">II</td>
+            <td style="color:#92400e;font-weight:700">III</td>
+            <td style="color:#b45309;font-weight:700">IV</td>
+            <td style="color:#991b1b;font-weight:700">V</td>
+          </tr>
+          <tr>
+            <td class="ref-row-label">Description</td>
+            <td>Very good rock</td>
+            <td>Good rock</td>
+            <td>Fair rock</td>
+            <td>Poor rock</td>
+            <td>Very poor rock</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="font-size:11.5px;color:#94a3b8;line-height:1.6;margin-top:12px">
+      <strong style="color:#4a5568">Rating ranges:</strong>
+      Strength (0–15) &nbsp;·&nbsp; RQD (3–20) &nbsp;·&nbsp; Spacing (5–20) &nbsp;·&nbsp;
+      Condition (0–30) &nbsp;·&nbsp; Groundwater (0–15) &nbsp;·&nbsp;
+      Orientation adjustment: Tunnels (0 to −12) · Foundations (0 to −25) · Slopes (0 to −60)
+    </div>
+  </div>
+
+  <!-- ═══════════ RESULTS ═══════════ -->
+  <div class="card">
+    <div class="card-title">Results Table</div>
+
+    <!-- Summary stats -->
+    <div class="stats-grid" id="stats_grid" style="display:none">
+      <div class="stat-box"><div class="stat-val" id="st_count">0</div><div class="stat-lbl">Entries</div></div>
+      <div class="stat-box"><div class="stat-val" id="st_min">—</div><div class="stat-lbl">Min RMR</div></div>
+      <div class="stat-box"><div class="stat-val" id="st_max">—</div><div class="stat-lbl">Max RMR</div></div>
+      <div class="stat-box"><div class="stat-val" id="st_avg">—</div><div class="stat-lbl">Avg RMR</div></div>
+    </div>
+
+    <div class="btn-row" style="margin-top:0; margin-bottom:18px">
+      <button class="btn btn-green" onclick="exportPDF()">&#8659; Export PDF</button>
+      <button class="btn btn-blue"  onclick="exportCSV()">&#8659; Export CSV</button>
+      <button class="btn btn-red"   onclick="clearAll()">Clear All</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>RD / Offset (m)<br>Location</th>
+            <th>Strength of Intact<br>Rock Mass</th>
+            <th>RQD*</th>
+            <th>Spacing of<br>Discontinuity</th>
+            <th>Condition of Discontinuity<br><em style="font-weight:400;font-size:10px">(Persistence, Aperture,<br>Roughness, Infilling, Weathering)</em></th>
+            <th>Groundwater<br>Condition</th>
+            <th>Discontinuity<br>Orientation</th>
+            <th>RMR /<br>Rock Class</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbl_body">
+          <tr><td colspan="10" class="empty-msg">No entries yet — fill the form above and click <strong>Add to Table</strong>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ── Lookup tables ──────────────────────────────────────────────
+const ORIENT = {
+  tunnel:     { vf:0, fav:-2, fair:-5,  unf:-10, vunf:-12 },
+  foundation: { vf:0, fav:-2, fair:-7,  unf:-15, vunf:-25 },
+  slope:      { vf:0, fav:-5, fair:-25, unf:-50, vunf:-60 }
+};
+const ORIENT_LBL = { vf:'Very Favorable', fav:'Favorable', fair:'Fair', unf:'Unfavorable', vunf:'Very Unfavorable' };
+
+function rqdRating(v) {
+  if (v >= 90) return 20;
+  if (v >= 75) return 17;
+  if (v >= 50) return 13;
+  if (v >= 25) return 8;
+  return 3;
+}
+
+function rmrClass(rmr) {
+  if (rmr >= 81) return { cls:'I',   cat:'Very Good Rock', css:'cl-I'   };
+  if (rmr >= 61) return { cls:'II',  cat:'Good Rock',      css:'cl-II'  };
+  if (rmr >= 41) return { cls:'III', cat:'Fair Rock',      css:'cl-III' };
+  if (rmr >= 21) return { cls:'IV',  cat:'Poor Rock',      css:'cl-IV'  };
+  return              { cls:'V',   cat:'Very Poor Rock', css:'cl-V'   };
+}
+
+function selVal(id)  { return parseInt(document.getElementById(id).value) || 0; }
+function selTxt(id)  {
+  const s = document.getElementById(id);
+  return s.options[s.selectedIndex].text.split('[Rating')[0].trim();
+}
+
+// ── UCS MPa → auto-select R-grade ─────────────────────────────
+function ucsAutoSelect() {
+  const mpa = parseFloat(document.getElementById('f_ucs').value);
+  const sel  = document.getElementById('f_strength');
+  const hint = document.getElementById('ucs_hint');
+  if (isNaN(mpa) || document.getElementById('f_ucs').value === '') {
+    hint.textContent = 'Enter MPa — R-grade auto-selected';
+    recalc(); return;
+  }
+  let ratingVal;
+  if      (mpa > 250) ratingVal = 15;
+  else if (mpa >= 100) ratingVal = 12;
+  else if (mpa >= 50)  ratingVal = 7;
+  else if (mpa >= 25)  ratingVal = 4;
+  else if (mpa >= 5)   ratingVal = 2;
+  else if (mpa >= 1)   ratingVal = 1;
+  else                 ratingVal = 0;
+  for (let i = 0; i < sel.options.length; i++) {
+    if (parseInt(sel.options[i].value) === ratingVal) { sel.selectedIndex = i; break; }
+  }
+  hint.textContent = `→ ${sel.options[sel.selectedIndex].text}  |  Rating: ${ratingVal}`;
+  recalc();
+}
+
+// ── Jv → RQD helper ───────────────────────────────────────────
+function getJvRqd() {
+  const raw = document.getElementById('f_jv').value;
+  if (raw === '') return null;
+  const jv  = parseFloat(raw) || 0;
+  return Math.min(100, Math.max(0, Math.round((115 - 3.3 * jv) * 10) / 10));
+}
+
+// ── Live recalc ────────────────────────────────────────────────
+function recalc() {
+  const rqdVal = getJvRqd();
+  const hasRqd = rqdVal !== null;
+
+  document.getElementById('rqd_hint').textContent =
+    hasRqd ? `RQD = ${rqdVal}%  |  Rating: ${rqdRating(rqdVal)}` : 'Enter Jv → RQD = 115 − 3.3 × Jv';
+
+  if (!hasRqd) {
+    document.getElementById('live_rmr').textContent = '—';
+    document.getElementById('live_class').textContent = '—';
+    document.getElementById('live_cat').textContent = '—';
+    document.getElementById('live_breakdown').textContent = 'Enter Jv to see live calculation.';
+    return;
+  }
+
+  const r1 = selVal('f_strength');
+  const r2 = rqdRating(rqdVal);
+  const r3 = selVal('f_spacing');
+  const r4a = selVal('f_persist');
+  const r4b = selVal('f_aperture');
+  const r4c = selVal('f_rough');
+  const r4d = selVal('f_infill');
+  const r4e = selVal('f_weather');
+  const r5  = selVal('f_gw');
+  const struct = 'foundation';
+  const orientKey = document.getElementById('f_orient').value;
+  const r6 = ORIENT[struct][orientKey];
+  const r4total = r4a + r4b + r4c + r4d + r4e;
+  const total = r1 + r2 + r3 + r4total + r5 + r6;
+  const { cls, cat } = rmrClass(total);
+
+  document.getElementById('live_rmr').textContent   = total;
+  document.getElementById('live_class').textContent  = `Class ${cls}`;
+  document.getElementById('live_cat').textContent    = cat;
+  document.getElementById('live_breakdown').innerHTML =
+    `<strong>Rating breakdown:</strong><br>
+     Strength: ${r1} &nbsp;|&nbsp; RQD: ${r2} &nbsp;|&nbsp; Spacing: ${r3}<br>
+     Condition: ${r4a}+${r4b}+${r4c}+${r4d}+${r4e} = ${r4total}<br>
+     Groundwater: ${r5} &nbsp;|&nbsp; Orientation: ${r6}<br>
+     <strong>RMR = ${r1}+${r2}+${r3}+${r4total}+${r5}+(${r6}) = ${total}</strong>`;
+}
+
+// ── Entries store ──────────────────────────────────────────────
+let entries = [];
+let nextId  = 1;
+
+function addEntry() {
+  const rqdVal = getJvRqd();
+  if (rqdVal === null) { alert('Please enter a Jv value to calculate RQD.'); return; }
+
+  const r1     = selVal('f_strength');
+  const r2     = rqdRating(rqdVal);
+  const r3     = selVal('f_spacing');
+  const r4a    = selVal('f_persist');
+  const r4b    = selVal('f_aperture');
+  const r4c    = selVal('f_rough');
+  const r4d    = selVal('f_infill');
+  const r4e    = selVal('f_weather');
+  const r5     = selVal('f_gw');
+  const struct = 'foundation';
+  const oKey   = document.getElementById('f_orient').value;
+  const r6     = ORIENT[struct][oKey];
+  const r4tot  = r4a + r4b + r4c + r4d + r4e;
+  const rmr    = r1 + r2 + r3 + r4tot + r5 + r6;
+  const cls    = rmrClass(rmr);
+
+  const strSel   = document.getElementById('f_strength');
+  const strParts = strSel.options[strSel.selectedIndex].getAttribute('data-desc').split('|');
+  const ucsInput = document.getElementById('f_ucs').value.trim();
+  const ucsBullet = ucsInput ? ucsInput + ' MPa' : strParts[1];
+  const wgrade   = document.getElementById('f_wgrade').value;
+  const strFull  = wgrade + '\n' + strParts[0] + '\n' + ucsBullet + '\n' + strParts[2];
+
+  const rd        = document.getElementById('f_rd').value.trim();
+  const offset    = document.getElementById('f_offset').value.trim();
+  const direction = document.getElementById('f_direction').value;
+  const location  = (rd || '?') + 'm/' + (offset || '?') + 'm ' + direction;
+
+  entries.push({
+    id: nextId++,
+    location,
+    strength : { desc: strFull, rating: r1 },
+    rqd      : { value: rqdVal, rating: r2 },
+    spacing  : { desc: selTxt('f_spacing'), rating: r3 },
+    persist  : { desc: selTxt('f_persist'),  rating: r4a },
+    aperture : { desc: selTxt('f_aperture'), rating: r4b },
+    rough    : { desc: selTxt('f_rough'),    rating: r4c },
+    infill   : { desc: selTxt('f_infill'),   rating: r4d },
+    weather  : { desc: selTxt('f_weather'),  rating: r4e },
+    cond4tot : r4tot,
+    gw       : { desc: selTxt('f_gw'),       rating: r5 },
+    orient   : { desc: ORIENT_LBL[oKey],     rating: r6 },
+    rmr, cls
+  });
+
+  renderTable();
+}
+
+function deleteEntry(id) {
+  entries = entries.filter(e => e.id !== id);
+  renderTable();
+}
+
+function clearAll() {
+  if (entries.length && !confirm('Remove all entries?')) return;
+  entries = [];
+  renderTable();
+}
+
+function clearForm() {
+  document.getElementById('f_rd').value          = '';
+  document.getElementById('f_offset').value      = '';
+  document.getElementById('f_ucs').value         = '';
+  document.getElementById('f_jv').value          = '';
+  document.getElementById('ucs_hint').textContent = 'Enter MPa — R-grade auto-selected';
+  document.getElementById('rqd_hint').textContent = 'Enter Jv → RQD = 115 − 3.3 × Jv';
+  recalc();
+}
+
+function clearProject() {
+  document.getElementById('f_project').value = '';
+}
+
+// ── Stats ──────────────────────────────────────────────────────
+function updateStats() {
+  const grid = document.getElementById('stats_grid');
+  if (!entries.length) { grid.style.display = 'none'; return; }
+  grid.style.display = 'grid';
+  const rmrs = entries.map(e => e.rmr);
+  const avg  = Math.round(rmrs.reduce((a,b) => a+b, 0) / rmrs.length);
+  document.getElementById('st_count').textContent = entries.length;
+  document.getElementById('st_min').textContent   = Math.min(...rmrs);
+  document.getElementById('st_max').textContent   = Math.max(...rmrs);
+  document.getElementById('st_avg').textContent   = avg;
+}
+
+// ── Render ─────────────────────────────────────────────────────
+function renderTable() {
+  const tbody = document.getElementById('tbl_body');
+  updateStats();
+  if (!entries.length) {
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-msg">No entries yet — fill the form above and click <strong>Add to Table</strong>.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = entries.map((e, i) => {
+    const condDesc   = [e.persist.desc, e.aperture.desc, e.rough.desc, e.infill.desc, e.weather.desc].join(',<br>');
+    const condRating = `${e.persist.rating}+${e.aperture.rating}+${e.rough.rating}+${e.infill.rating}+${e.weather.rating}`;
+    return `
+      <tr class="data-row">
+        <td>${i+1}</td>
+        <td><strong>${e.location}</strong></td>
+        <td>${e.strength.desc.split('\n').map(l => `• ${l}`).join('<br>')}</td>
+        <td>${e.rqd.value}%</td>
+        <td>${e.spacing.desc}</td>
+        <td>${condDesc}</td>
+        <td>${e.gw.desc}</td>
+        <td>${e.orient.desc}</td>
+        <td>
+          <div class="rmr-result">RMR = ${e.rmr}</div>
+          <span class="rock-badge ${e.cls.css}">Class ${e.cls.cls}</span>
+          <div style="font-size:11px;color:#64748b;margin-top:2px">(${e.cls.cat})</div>
+        </td>
+        <td><button class="del-btn" onclick="deleteEntry(${e.id})" title="Remove">✕</button></td>
+      </tr>
+      <tr class="rating-row">
+        <td></td>
+        <td>Rating</td>
+        <td>${e.strength.rating}</td>
+        <td>${e.rqd.rating}</td>
+        <td>${e.spacing.rating}</td>
+        <td>${condRating} = ${e.cond4tot}</td>
+        <td>${e.gw.rating}</td>
+        <td>${e.orient.rating}</td>
+        <td></td>
+        <td></td>
+      </tr>`;
+  }).join('');
+}
+
+// ── Export CSV ─────────────────────────────────────────────────
+function exportCSV() {
+  if (!entries.length) { alert('No entries to export.'); return; }
+
+  const hdr = [
+    '#','RD/Offset (Location)',
+    'Strength Description','Strength Rating',
+    'RQD (%)','RQD Rating',
+    'Spacing Description','Spacing Rating',
+    'Persistence','Persistence Rating',
+    'Aperture','Aperture Rating',
+    'Roughness','Roughness Rating',
+    'Infilling','Infilling Rating',
+    'Weathering','Weathering Rating',
+    'Condition Total Rating',
+    'Groundwater','Groundwater Rating',
+    'Orientation','Orientation Rating',
+    'RMR','Rock Class','Category'
+  ];
+
+  const rows = entries.map((e, i) => [
+    i+1, e.location,
+    e.strength.desc, e.strength.rating,
+    e.rqd.value, e.rqd.rating,
+    e.spacing.desc, e.spacing.rating,
+    e.persist.desc, e.persist.rating,
+    e.aperture.desc, e.aperture.rating,
+    e.rough.desc, e.rough.rating,
+    e.infill.desc, e.infill.rating,
+    e.weather.desc, e.weather.rating,
+    e.cond4tot,
+    e.gw.desc, e.gw.rating,
+    e.orient.desc, e.orient.rating,
+    e.rmr, `Class ${e.cls.cls}`, e.cls.cat
+  ]);
+
+  const csv = [hdr, ...rows]
+    .map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(','))
+    .join('\r\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'), { href: url, download: 'RMR_Classification.csv' });
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Export PDF ─────────────────────────────────────────────────
+function exportPDF() {
+  if (!entries.length) { alert('No entries to export.'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', format: 'a3', unit: 'mm' });
+
+  const projectName = document.getElementById('f_project').value.trim();
+  const headerH = projectName ? 28 : 22;
+
+  // Header
+  doc.setFillColor(26, 58, 92);
+  doc.rect(0, 0, doc.internal.pageSize.width, headerH, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.text('Rock Mass Rating (RMR) Classification — Bieniawski (1989)', 14, 10);
+  doc.setFontSize(9);
+  if (projectName) {
+    doc.text(`Project: ${projectName}`, 14, 18);
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'})}`, 14, 24);
+  } else {
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'})}`, 14, 17);
+  }
+
+  // Build table body (data row + rating row per entry)
+  const body = [];
+  entries.forEach((e, i) => {
+    const condDesc   = [e.persist.desc, e.aperture.desc, e.rough.desc, e.infill.desc, e.weather.desc].map(l => '- ' + l).join('\n');
+    const condRating = `${e.persist.rating}+${e.aperture.rating}+${e.rough.rating}+${e.infill.rating}+${e.weather.rating} = ${e.cond4tot}`;
+
+    body.push([
+      { content: i+1, styles:{valign:'middle',halign:'center'} },
+      e.location,
+      e.strength.desc.split('\n').map(l => '- ' + l).join('\n'),
+      `${e.rqd.value}%`,
+      e.spacing.desc,
+      condDesc,
+      e.gw.desc,
+      e.orient.desc,
+      `RMR = ${e.rmr}\nClass ${e.cls.cls}\n(${e.cls.cat})`
+    ]);
+
+    body.push([
+      { content: '', styles:{fillColor:[232,240,250]} },
+      { content: 'Rating', styles:{fillColor:[232,240,250], fontStyle:'bolditalic', textColor:[26,58,92]} },
+      { content: e.strength.rating, styles:{fillColor:[232,240,250], fontStyle:'bold', textColor:[26,58,92]} },
+      { content: e.rqd.rating,      styles:{fillColor:[232,240,250], fontStyle:'bold', textColor:[26,58,92]} },
+      { content: e.spacing.rating,  styles:{fillColor:[232,240,250], fontStyle:'bold', textColor:[26,58,92]} },
+      { content: condRating,        styles:{fillColor:[232,240,250], fontStyle:'bold', textColor:[26,58,92]} },
+      { content: e.gw.rating,       styles:{fillColor:[232,240,250], fontStyle:'bold', textColor:[26,58,92]} },
+      { content: e.orient.rating,   styles:{fillColor:[232,240,250], fontStyle:'bold', textColor:[26,58,92]} },
+      { content: '',                styles:{fillColor:[232,240,250]} },
+    ]);
+  });
+
+  doc.autoTable({
+    startY: headerH + 6,
+    head: [[
+      '#',
+      'RD/Offset (m)\n(Location)',
+      'Strength of Intact\nRock Mass',
+      'RQD*',
+      'Spacing of\nDiscontinuity',
+      'Condition of Discontinuity\n(Persistence, Aperture,\nRoughness, Infilling, Weathering)',
+      'Groundwater\nCondition',
+      'Discontinuity\nOrientation',
+      'RMR / Rock Class'
+    ]],
+    body,
+    theme: 'grid',
+    headStyles: {
+      fillColor: [26, 58, 92],
+      textColor: 255,
+      fontSize: 8,
+      halign: 'center',
+      valign: 'bottom',
+      cellPadding: { top:5, bottom:5, left:4, right:4 }
+    },
+    bodyStyles: { fontSize: 8, cellPadding: { top:5, bottom:5, left:4, right:4 } },
+    columnStyles: {
+      0: { halign:'center', cellWidth:8 },
+      3: { halign:'center', cellWidth:14 },
+      8: { cellWidth:30 }
+    },
+    alternateRowStyles: { fillColor: [248,251,255] },
+    didDrawPage: (data) => {
+      const pg = doc.internal.getNumberOfPages();
+      doc.setFontSize(8); doc.setTextColor(150);
+      doc.text(`Page ${pg}`, doc.internal.pageSize.width - 20, doc.internal.pageSize.height - 8);
+    }
+  });
+
+  doc.save('RMR_Classification.pdf');
+}
+
+// Init
+recalc();
+</script>
+</body>
+</html>
