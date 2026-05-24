@@ -6,7 +6,7 @@
   <title>RMR Rock Mass Classification</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -564,7 +564,7 @@
         <thead>
           <tr>
             <th>S.N</th>
-            <th>RD / Offset (m)<br>Location</th>
+            <th>Location<br> RD / Offset (m)</th>
             <th>Strength of Intact<br>Rock Mass</th>
             <th>RQD*</th>
             <th>Spacing of<br>Discontinuity</th>
@@ -704,7 +704,7 @@ function addEntry() {
   const rd        = document.getElementById('f_rd').value.trim();
   const offset    = document.getElementById('f_offset').value.trim();
   const direction = document.getElementById('f_direction').value;
-  const location  = (rd || '?') + 'm/' + (offset || '?') + 'm ' + direction;
+  const location  = (rd || '?') + 'm/' + (offset || '?') + 'm\n' + direction;
 
   entries.push({
     id: nextId++,
@@ -778,7 +778,7 @@ function renderTable() {
     return `
       <tr class="data-row">
         <td>${i+1}</td>
-        <td><strong>${e.location}</strong></td>
+        <td>${e.location.split('\n').map(l => `<strong>${l}</strong>`).join('<br>')}</td>
         <td>${e.strength.desc.split('\n').map(l => `• ${l}`).join('<br>')}</td>
         <td>${e.rqd.value}%</td>
         <td>${e.spacing.desc}</td>
@@ -807,11 +807,41 @@ function renderTable() {
   }).join('');
 }
 
-// ── Export CSV ─────────────────────────────────────────────────
-function exportExcel() {
+// ── Export Excel ────────────────────────────────────────────────
+async function exportExcel() {
   if (!entries.length) { alert('No entries to export.'); return; }
 
-  const HDR = [
+  const projRaw  = document.getElementById('f_project').value.trim();
+  const fileName = (projRaw ? projRaw.replace(/[\\/:*?"<>|]/g, '_') : 'RMR_Classification') + '.xlsx';
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('RMR Classification');
+
+  // A4 landscape, normal margins
+  ws.pageSetup = { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+  ws.pageMargins = { left: 0.7, right: 0.7, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 };
+
+  ws.columns = [
+    { width: 6  },  // S.N
+    { width: 18 },  // Location
+    { width: 30 },  // Strength
+    { width: 10 },  // RQD
+    { width: 20 },  // Spacing
+    { width: 40 },  // Condition
+    { width: 18 },  // Groundwater
+    { width: 22 },  // Orientation
+    { width: 22 },  // RMR
+  ];
+
+  const border = {
+    top:    { style: 'thin', color: { argb: 'FFC5D4E8' } },
+    bottom: { style: 'thin', color: { argb: 'FFC5D4E8' } },
+    left:   { style: 'thin', color: { argb: 'FFC5D4E8' } },
+    right:  { style: 'thin', color: { argb: 'FFC5D4E8' } }
+  };
+
+  // Header row
+  const hdrRow = ws.addRow([
     'S.N',
     'RD / Offset (m)\nLocation',
     'Strength of Intact Rock Mass',
@@ -821,85 +851,57 @@ function exportExcel() {
     'Groundwater Condition',
     'Discontinuity Orientation',
     'RMR / Rock Class'
-  ];
-
-  const aoa = [HDR];
+  ]);
+  hdrRow.height = 36;
+  hdrRow.eachCell(cell => {
+    cell.font      = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+    cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3A5C' } };
+    cell.alignment = { wrapText: true, vertical: 'top', horizontal: 'center' };
+    cell.border    = border;
+  });
 
   entries.forEach((e, i) => {
     const condDesc   = [e.persist.desc, e.aperture.desc, e.rough.desc, e.infill.desc, e.weather.desc].map(l => '• ' + l).join('\n');
     const condRating = `${e.persist.rating}+${e.aperture.rating}+${e.rough.rating}+${e.infill.rating}+${e.weather.rating} = ${e.cond4tot}`;
-    const rmrText    = `RMR = ${e.rmr}\nClass ${e.cls.cls} (${e.cls.cat})`;
 
     // Data row
-    aoa.push([
+    const dataRow = ws.addRow([
       i + 1,
-      e.location,
+      e.location.split('\n').join('\n'),
       e.strength.desc.split('\n').map(l => '• ' + l).join('\n'),
       `${e.rqd.value}%`,
       e.spacing.desc,
       condDesc,
       e.gw.desc,
       e.orient.desc,
-      rmrText
+      `RMR = ${e.rmr}\nClass ${e.cls.cls} (${e.cls.cat})`
     ]);
+    dataRow.eachCell(cell => {
+      cell.alignment = { wrapText: true, vertical: 'top' };
+      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+      cell.border    = border;
+    });
 
     // Rating row
-    aoa.push([
+    const ratRow = ws.addRow([
       'Rating', '',
-      e.strength.rating,
-      e.rqd.rating,
-      e.spacing.rating,
+      e.strength.rating, e.rqd.rating, e.spacing.rating,
       condRating,
-      e.gw.rating,
-      e.orient.rating,
-      ''
+      e.gw.rating, e.orient.rating, ''
     ]);
+    ratRow.eachCell(cell => {
+      cell.font      = { bold: true, italic: true, color: { argb: 'FF1A3A5C' } };
+      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF3FA' } };
+      cell.alignment = { wrapText: true, vertical: 'top' };
+      cell.border    = { ...border, bottom: { style: 'medium', color: { argb: 'FFC5D4E8' } } };
+    });
   });
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-  // Column widths
-  ws['!cols'] = [
-    { wch: 6 },   // #
-    { wch: 18 },  // Location
-    { wch: 30 },  // Strength
-    { wch: 10 },  // RQD
-    { wch: 18 },  // Spacing
-    { wch: 38 },  // Condition
-    { wch: 18 },  // Groundwater
-    { wch: 22 },  // Orientation
-    { wch: 22 },  // RMR
-  ];
-
-  // Enable wrap-text + style for every cell
-  const range = XLSX.utils.decode_range(ws['!ref']);
-  for (let R = range.s.r; R <= range.e.r; R++) {
-    for (let C = range.s.c; C <= range.e.c; C++) {
-      const addr = XLSX.utils.encode_cell({ r: R, c: C });
-      if (!ws[addr]) continue;
-      const isHeader  = R === 0;
-      const isRating  = R > 0 && (R % 2 === 0);   // every even row after header = rating row
-      ws[addr].s = {
-        alignment: { wrapText: true, vertical: 'top' },
-        font: isHeader  ? { bold: true, color: { rgb: 'FFFFFF' } }
-            : isRating  ? { bold: true, italic: true, color: { rgb: '1A3A5C' } }
-            : {},
-        fill: isHeader ? { fgColor: { rgb: '1A3A5C' } }
-            : isRating ? { fgColor: { rgb: 'EEF3FA' } }
-            : { fgColor: { rgb: 'FFFFFF' } },
-        border: {
-          top:    { style: 'thin', color: { rgb: 'C5D4E8' } },
-          bottom: { style: 'thin', color: { rgb: 'C5D4E8' } },
-          left:   { style: 'thin', color: { rgb: 'C5D4E8' } },
-          right:  { style: 'thin', color: { rgb: 'C5D4E8' } }
-        }
-      };
-    }
-  }
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'RMR Classification');
-  XLSX.writeFile(wb, 'RMR_Classification.xlsx');
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob   = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url    = URL.createObjectURL(blob);
+  Object.assign(document.createElement('a'), { href: url, download: fileName }).click();
+  URL.revokeObjectURL(url);
 }
 
 // ── Export PDF ─────────────────────────────────────────────────
@@ -910,6 +912,7 @@ function exportPDF() {
   const doc = new jsPDF({ orientation: 'landscape', format: 'a3', unit: 'mm' });
 
   const projectName = document.getElementById('f_project').value.trim();
+  const pdfFileName = (projectName ? projectName.replace(/[\\/:*?"<>|]/g, '_') : 'RMR_Classification') + '.pdf';
   const headerH = projectName ? 28 : 22;
 
   // Header
@@ -995,7 +998,7 @@ function exportPDF() {
     }
   });
 
-  doc.save('RMR_Classification.pdf');
+  doc.save(pdfFileName);
 }
 
 // Init
