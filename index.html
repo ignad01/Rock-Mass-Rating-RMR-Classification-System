@@ -817,33 +817,39 @@ async function exportExcel() {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('RMR Classification');
 
-  // A4 landscape, normal margins
-  ws.pageSetup = { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+  ws.pageSetup  = { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
   ws.pageMargins = { left: 0.7, right: 0.7, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 };
 
   ws.columns = [
-    { width: 6  },  // S.N
-    { width: 18 },  // Location
-    { width: 30 },  // Strength
-    { width: 10 },  // RQD
-    { width: 20 },  // Spacing
-    { width: 40 },  // Condition
-    { width: 18 },  // Groundwater
-    { width: 22 },  // Orientation
-    { width: 22 },  // RMR
+    { width: 6  },
+    { width: 20 },
+    { width: 32 },
+    { width: 8  },
+    { width: 18 },
+    { width: 42 },
+    { width: 16 },
+    { width: 20 },
+    { width: 22 },
   ];
 
   const border = {
-    top:    { style: 'thin', color: { argb: 'FFC5D4E8' } },
-    bottom: { style: 'thin', color: { argb: 'FFC5D4E8' } },
-    left:   { style: 'thin', color: { argb: 'FFC5D4E8' } },
-    right:  { style: 'thin', color: { argb: 'FFC5D4E8' } }
+    top:    { style: 'thin', color: { argb: 'FF000000' } },
+    bottom: { style: 'thin', color: { argb: 'FF000000' } },
+    left:   { style: 'thin', color: { argb: 'FF000000' } },
+    right:  { style: 'thin', color: { argb: 'FF000000' } }
   };
+  const boldBorder = { ...border, bottom: { style: 'medium', color: { argb: 'FF000000' } } };
 
-  // Header row
+  function applyCell(cell, { bold = false, italic = false, wrapText = true, hAlign = 'left' } = {}) {
+    cell.font      = { bold, italic, size: 10 };
+    cell.alignment = { wrapText, vertical: 'top', horizontal: hAlign };
+    cell.border    = border;
+  }
+
+  // ── Row 1: Column headers ──
   const hdrRow = ws.addRow([
     'S.N',
-    'RD / Offset (m)\nLocation',
+    'RD/Offset(in m)\n(Location)',
     'Strength of Intact Rock Mass',
     'RQD*',
     'Spacing of Discontinuity',
@@ -852,48 +858,42 @@ async function exportExcel() {
     'Discontinuity Orientation',
     'RMR / Rock Class'
   ]);
-  hdrRow.height = 36;
-  hdrRow.eachCell(cell => {
-    cell.font      = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
-    cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1A3A5C' } };
-    cell.alignment = { wrapText: true, vertical: 'top', horizontal: 'center' };
-    cell.border    = border;
-  });
+  hdrRow.height = 38;
+  hdrRow.eachCell(cell => applyCell(cell, { bold: true, hAlign: 'center' }));
 
+  // ── Row 2: Standalone "Rating" label row ──
+  const lblRow = ws.addRow(['', 'Rating', '', '', '', '', '', '', '']);
+  lblRow.eachCell(cell => applyCell(cell, { bold: true }));
+
+  // ── Entries ──
   entries.forEach((e, i) => {
-    const condDesc   = [e.persist.desc, e.aperture.desc, e.rough.desc, e.infill.desc, e.weather.desc].map(l => '• ' + l).join('\n');
+    const condDesc   = [e.persist.desc, e.aperture.desc, e.rough.desc, e.infill.desc, e.weather.desc].join(',\n');
     const condRating = `${e.persist.rating}+${e.aperture.rating}+${e.rough.rating}+${e.infill.rating}+${e.weather.rating} = ${e.cond4tot}`;
 
     // Data row
     const dataRow = ws.addRow([
       i + 1,
-      e.location.split('\n').join('\n'),
+      e.location,
       e.strength.desc.split('\n').map(l => '• ' + l).join('\n'),
       `${e.rqd.value}%`,
       e.spacing.desc,
       condDesc,
       e.gw.desc,
       e.orient.desc,
-      `RMR = ${e.rmr}\nClass ${e.cls.cls} (${e.cls.cat})`
+      `RMR = ${e.rmr}\nRock Class = ${e.cls.cls}\n(${e.cls.cat})`
     ]);
-    dataRow.eachCell(cell => {
-      cell.alignment = { wrapText: true, vertical: 'top' };
-      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
-      cell.border    = border;
-    });
+    dataRow.eachCell(cell => applyCell(cell));
 
-    // Rating row
+    // Rating row — "Rating" in Location column, S.N blank
     const ratRow = ws.addRow([
-      'Rating', '',
+      '', 'Rating',
       e.strength.rating, e.rqd.rating, e.spacing.rating,
       condRating,
       e.gw.rating, e.orient.rating, ''
     ]);
     ratRow.eachCell(cell => {
-      cell.font      = { bold: true, italic: true, color: { argb: 'FF1A3A5C' } };
-      cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF3FA' } };
-      cell.alignment = { wrapText: true, vertical: 'top' };
-      cell.border    = { ...border, bottom: { style: 'medium', color: { argb: 'FFC5D4E8' } } };
+      applyCell(cell, { bold: true, italic: true });
+      cell.border = boldBorder;
     });
   });
 
