@@ -557,6 +557,7 @@
     <div class="btn-row" style="margin-top:0; margin-bottom:18px">
       <button class="btn btn-green" onclick="exportPDF()">&#8659; Export PDF</button>
       <button class="btn btn-blue"  onclick="exportExcel()">&#8659; Export Excel</button>
+      <button class="btn btn-blue"  onclick="exportSummaryExcel()" style="background:#0891b2">&#8659; Export Summary</button>
       <button class="btn btn-red"   onclick="clearAll()">Clear All</button>
     </div>
     <div class="table-wrap">
@@ -708,7 +709,7 @@ function addEntry() {
 
   entries.push({
     id: nextId++,
-    location,
+    rd, offset, direction, location,
     strength : { desc: strFull, rating: r1 },
     rqd      : { value: rqdVal, rating: r2 },
     spacing  : { desc: selTxt('f_spacing'), rating: r3 },
@@ -895,6 +896,66 @@ async function exportExcel() {
       applyCell(cell, { bold: true, italic: true });
       cell.border = boldBorder;
     });
+  });
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob   = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url    = URL.createObjectURL(blob);
+  Object.assign(document.createElement('a'), { href: url, download: fileName }).click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Export Summary Excel (5 columns) ───────────────────────────
+async function exportSummaryExcel() {
+  if (!entries.length) { alert('No entries to export.'); return; }
+
+  const projRaw  = document.getElementById('f_project').value.trim();
+  const fileName = (projRaw ? projRaw.replace(/[\\/:*?"<>|]/g, '_') : 'RMR_Classification') + '_Summary.xlsx';
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('RMR Summary');
+
+  ws.pageSetup  = { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
+  ws.pageMargins = { left: 0.7, right: 0.7, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 };
+
+  ws.columns = [
+    { width: 6  },   // S.N
+    { width: 14 },   // RD
+    { width: 14 },   // Offset
+    { width: 22 },   // Location (Direction)
+    { width: 20 },   // RMR / Rock Class
+  ];
+
+  const border = {
+    top:    { style: 'thin', color: { argb: 'FF000000' } },
+    bottom: { style: 'thin', color: { argb: 'FF000000' } },
+    left:   { style: 'thin', color: { argb: 'FF000000' } },
+    right:  { style: 'thin', color: { argb: 'FF000000' } }
+  };
+
+  function applyCell(cell, { bold = false, hAlign = 'center', wrapText = true } = {}) {
+    cell.font      = { bold, size: 10 };
+    cell.alignment = { wrapText, vertical: 'middle', horizontal: hAlign };
+    cell.border    = border;
+  }
+
+  // Header row
+  const hdrRow = ws.addRow(['S.N', 'RD (m)', 'Offset (m)', 'Location', 'RMR']);
+  hdrRow.height = 22;
+  hdrRow.eachCell(cell => applyCell(cell, { bold: true, hAlign: 'center' }));
+
+  // Data rows
+  entries.forEach((e, i) => {
+    const rdVal     = e.rd     ? parseFloat(e.rd)     : '?';
+    const offsetVal = e.offset ? parseFloat(e.offset) : '?';
+    const row = ws.addRow([
+      i + 1,
+      rdVal,
+      offsetVal,
+      e.direction,
+      `RMR = ${e.rmr}`
+    ]);
+    row.eachCell(cell => applyCell(cell, { hAlign: 'center' }));
   });
 
   const buffer = await wb.xlsx.writeBuffer();
